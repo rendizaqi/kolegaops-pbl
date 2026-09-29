@@ -1,2 +1,5 @@
 node_modules
 dist
+
+# PHP local test database
+php/data/
