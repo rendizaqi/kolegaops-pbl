@@ -1,3 +1,17 @@
+# KolegaOps — POS Warkop Kolega
+
+React + TypeScript + Vite implementation of `project/KolegaOps Wireframe.dc.html`.
+
+```sh
+npm install
+npm run dev      # http://localhost:5173
+npm run build
+```
+
+Routes: `/dashboard`, `/kasir`, `/menu`, `/stok`, `/laporan`. All data is placeholder (`src/data.ts`) held in memory (`src/store.tsx`), so it resets on reload.
+
+---
+
 # CODING AGENTS: READ THIS FIRST
 
 This is a **handoff bundle** from Claude Design (claude.ai/design).
