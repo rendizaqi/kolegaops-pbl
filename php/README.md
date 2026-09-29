@@ -44,3 +44,32 @@ KOLEGA_DB_DRIVER=sqlite php -S localhost:8000  # buka http://localhost:8000
 
 Data awal adalah data contoh dan bisa diubah langsung dari aplikasi
 (tersimpan di database).
+
+---
+
+## Deploy ke VPS lewat Coolify (Docker)
+
+Aplikasi ini sudah dibungkus Docker (`Dockerfile` + `docker-compose.yml`) berisi
+aplikasi PHP **dan** MySQL sekaligus. Tabel & data contoh dibuat otomatis saat
+pertama jalan (`init.php`) — aman diulang, tidak menimpa data yang sudah ada.
+
+**1. Cloudflare** — tambah DNS record:
+- Type `A`, Name = subdomain baru (mis. `pos`), Content = IP VPS, Proxy = **DNS only (abu-abu)**.
+
+**2. Kode ke Git** — taruh isi folder ini ke sebuah repo GitHub (repo baru,
+`docker-compose.yml` ada di root repo).
+
+**3. Coolify** — buat **Project baru** (jangan ganggu project lain):
+- Add Resource → **Docker Compose** → hubungkan repo GitHub tadi.
+- Isi **Environment Variables** (ganti password!):
+  - `KOLEGA_DB_NAME=kolegaops`
+  - `KOLEGA_DB_USER=kolega`
+  - `KOLEGA_DB_PASS=<password-kuat>`
+  - `KOLEGA_DB_ROOT_PASS=<password-root-kuat>`
+- Pasang **Domain** = subdomain tadi ke service **app**, port **80**.
+- **Deploy**. Traefik + HTTPS (Let's Encrypt) otomatis.
+
+**4. Buka** `https://<subdomain>` — aplikasi siap dipakai tim.
+
+> Data tersimpan di volume MySQL (`dbdata`), jadi tetap ada walau di-redeploy.
+> `setup.php` hanya untuk reset lokal — jangan dijalankan di server (menghapus data).

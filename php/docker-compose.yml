@@ -1,0 +1,32 @@
+# KolegaOps — stack lengkap (aplikasi + MySQL) untuk deploy sebagai satu
+# project di Coolify. Set nilai rahasia (password) lewat Environment Variables
+# di Coolify, lalu pasang domain ke service "app".
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      KOLEGA_DB_DRIVER: mysql
+      KOLEGA_DB_HOST: db
+      KOLEGA_DB_PORT: "3306"
+      KOLEGA_DB_NAME: ${KOLEGA_DB_NAME:-kolegaops}
+      KOLEGA_DB_USER: ${KOLEGA_DB_USER:-kolega}
+      KOLEGA_DB_PASS: ${KOLEGA_DB_PASS:-changeme}
+    expose:
+      - "80"
+    depends_on:
+      - db
+
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${KOLEGA_DB_NAME:-kolegaops}
+      MYSQL_USER: ${KOLEGA_DB_USER:-kolega}
+      MYSQL_PASSWORD: ${KOLEGA_DB_PASS:-changeme}
+      MYSQL_ROOT_PASSWORD: ${KOLEGA_DB_ROOT_PASS:-changeme_root}
+    volumes:
+      - dbdata:/var/lib/mysql
+
+volumes:
+  dbdata:

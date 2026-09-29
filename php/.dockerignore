@@ -1,0 +1,4 @@
+data/
+*.sqlite
+.git
+README.md
