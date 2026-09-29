@@ -1,6 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, MemoryRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { StoreProvider } from './store';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
@@ -10,10 +10,13 @@ import ManajemenStok from './pages/ManajemenStok';
 import Laporan from './pages/Laporan';
 import './styles.css';
 
+// VITE_MEMORY_ROUTER=1 builds a self-contained preview (e.g. for embedding) that doesn't touch the URL.
+const Router = import.meta.env.VITE_MEMORY_ROUTER ? MemoryRouter : BrowserRouter;
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <StoreProvider>
-      <BrowserRouter>
+      <Router>
         <Routes>
           <Route element={<Layout />}>
             <Route index element={<Navigate to="/dashboard" replace />} />
@@ -25,7 +28,7 @@ createRoot(document.getElementById('root')!).render(
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Route>
         </Routes>
-      </BrowserRouter>
+      </Router>
     </StoreProvider>
   </StrictMode>,
 );
