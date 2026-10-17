@@ -1,39 +1,77 @@
-# KolegaOps — POS Warkop Kolega
+# KolegaOps
 
-React + TypeScript + Vite implementation of `project/KolegaOps Wireframe.dc.html`.
+Sistem kasir (POS) berbasis web untuk **Warkop Kolega**, dibuat sebagai proyek PBL.
+KolegaOps membantu mencatat penjualan, mengelola menu dan stok bahan baku, serta
+melihat laporan transaksi harian.
 
-```sh
-npm install
-npm run dev      # http://localhost:5173
-npm run build
+## Fitur
+
+| Halaman | Fungsi |
+| --- | --- |
+| **Dashboard** | Ringkasan penjualan hari ini, jumlah transaksi, stok kritis, grafik pendapatan 7 hari, dan transaksi terbaru |
+| **Kasir** | Pilih menu, atur jumlah pesanan, hitung total, input nominal bayar, kembalian otomatis, dan simpan transaksi |
+| **Manajemen Menu** | Tambah, ubah, hapus produk (nama, kategori, harga), serta aktif/nonaktifkan menu |
+| **Manajemen Stok** | Daftar bahan baku dengan status Kritis / Menipis / Aman, update stok (tambah, kurangi, set jumlah), dan tambah bahan |
+| **Laporan Transaksi** | Filter per tanggal, shift, dan kasir; ringkasan pendapatan; ekspor CSV |
+
+Status stok: **Kritis** bila stok di bawah atau sama dengan batas minimum, **Menipis**
+bila masih dalam 1,5 kali batas minimum, selain itu **Aman**.
+
+## Teknologi
+
+- **PHP 8** (tanpa framework), **HTML**, **CSS**, tanpa JavaScript
+- **MySQL** untuk produksi, **SQLite** untuk uji coba lokal
+- **Docker** (`php/Dockerfile` dan `php/docker-compose.yml`)
+
+Folder `src/` berisi prototipe tampilan versi React + TypeScript + Vite. Versi ini
+dipakai sebagai acuan desain, bukan aplikasi utama.
+
+## Struktur proyek
+
+```
+php/        Aplikasi utama (PHP + MySQL)
+  dashboard.php, kasir.php, menu.php, stok.php, laporan.php
+  includes/   koneksi database, fungsi bantu, kerangka halaman
+  config.php  pengaturan koneksi database
+  schema.sql  skema tabel MySQL
+  setup.php   reset database lokal + data contoh
+  init.php    inisialisasi database yang aman diulang (dipakai Docker)
+src/        Prototipe tampilan React (acuan desain)
+project/    File desain wireframe
+chats/      Catatan proses desain
 ```
 
-Routes: `/dashboard`, `/kasir`, `/menu`, `/stok`, `/laporan`. All data is placeholder (`src/data.ts`) held in memory (`src/store.tsx`), so it resets on reload.
+## Menjalankan di komputer sendiri
 
----
+Butuh PHP 8 dengan ekstensi `pdo_sqlite`. Tidak perlu memasang MySQL.
 
-# CODING AGENTS: READ THIS FIRST
+```sh
+cd php
+KOLEGA_DB_DRIVER=sqlite php setup.php            # buat tabel + data contoh
+KOLEGA_DB_DRIVER=sqlite php -S localhost:8000    # lalu buka http://localhost:8000
+```
 
-This is a **handoff bundle** from Claude Design (claude.ai/design).
+Dengan Docker (aplikasi + MySQL):
 
-A user mocked up designs in HTML/CSS/JS using an AI design tool, then exported this bundle so a coding agent can implement the designs for real.
+```sh
+cd php
+docker compose up --build    # lalu buka port 80 dari service "app"
+```
 
-## What you should do — IMPORTANT
+Untuk memakai MySQL biasa, isi kredensial di `php/config.php` (atau lewat environment
+variable `KOLEGA_DB_*`), impor `php/schema.sql`, lalu jalankan `php/setup.php` sekali.
 
-**Read the chat transcripts first.** There are 1 chat transcript(s) in `chats/`. The transcripts show the full back-and-forth between the user and the design assistant — they tell you **what the user actually wants** and **where they landed** after iterating. Don't skip them. The final HTML files are the output, but the chat is where the intent lives.
+## Status
 
-**Read `project/KolegaOps Wireframe.dc.html` in full.** The user had this file open when they triggered the handoff, so it's almost certainly the primary design they want built. Read it top to bottom — don't skim. Then **follow its imports**: open every file it pulls in (shared components, CSS, scripts) so you understand how the pieces fit together before you start implementing.
+Ini versi pertama dengan data contoh. Yang sudah jalan: kelima halaman di atas dengan
+data tersimpan di database.
 
-**If anything is ambiguous, ask the user to confirm before you start implementing.** It's much cheaper to clarify scope up front than to build the wrong thing.
+Belum ada, dan masuk rencana pengembangan:
 
-## About the design files
-
-The design medium is **HTML/CSS/JS** — these are prototypes, not production code. Your job is to **recreate them pixel-perfectly** in whatever technology makes sense for the target codebase (React, Vue, native, whatever fits). Match the visual output; don't copy the prototype's internal structure unless it happens to fit.
-
-**Don't render these files in a browser or take screenshots unless the user asks you to.** Everything you need — dimensions, colors, layout rules — is spelled out in the source. Read the HTML and CSS directly; a screenshot won't tell you anything they don't.
-
-## Bundle contents
-
-- `README.md` — this file
-- `chats/` — conversation transcripts (read these!)
-- `project/` — the `KolegaOps POS Wireframes` project files (HTML prototypes, assets, components)
+- Login dengan akun per orang (1 pemilik, 5 pegawai)
+- Pencatatan shift (8 jam), tutup shift, dan laporan per shift
+- HPP dan laba per produk, laporan harian lengkap dengan HPP
+- Pembayaran tunai dan QRIS, pencatatan pengeluaran
+- Stok per menu yang berkurang otomatis saat transaksi
+- Cetak struk dan open bill
+- Pengiriman laporan ke WhatsApp
