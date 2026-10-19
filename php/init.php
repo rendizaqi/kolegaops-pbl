@@ -8,7 +8,7 @@
  */
 declare(strict_types=1);
 
-require __DIR__ . '/includes/schema_seed.php';
+require_once __DIR__ . '/includes/schema_seed.php';
 $c = require __DIR__ . '/config.php';
 
 function kolega_connect(array $c): PDO

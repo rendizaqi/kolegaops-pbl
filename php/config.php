@@ -7,8 +7,8 @@
  * di-set lewat environment variable (KOLEGA_DB_*) tanpa mengubah file ini.
  */
 return [
-    // 'mysql' untuk produksi, 'sqlite' untuk uji coba lokal tanpa server DB.
-    'driver'      => getenv('KOLEGA_DB_DRIVER') ?: 'mysql',
+    // 'sqlite' (bawaan, tanpa server DB, cocok untuk demo) atau 'mysql' untuk produksi.
+    'driver'      => getenv('KOLEGA_DB_DRIVER') ?: 'sqlite',
 
     // Pengaturan MySQL:
     'host'        => getenv('KOLEGA_DB_HOST') ?: '127.0.0.1',

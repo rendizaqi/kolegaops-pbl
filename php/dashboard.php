@@ -1,36 +1,42 @@
 <?php
 require __DIR__ . '/includes/functions.php';
+$u = require_owner();
 $db = pdo();
 $today = date('Y-m-d');
 
-// Ringkasan hari ini.
-$st = $db->prepare("SELECT COALESCE(SUM(total),0) FROM transaksi WHERE tanggal=? AND status='lunas'");
+$st = $db->prepare("SELECT COUNT(*) AS n, COALESCE(SUM(total),0) AS t, COALESCE(SUM(hpp),0) AS h FROM transaksi WHERE tanggal = ? AND status = 'lunas'");
 $st->execute([$today]);
-$penjualan = (int) $st->fetchColumn();
+$hari = $st->fetch();
+$penjualan = (int) $hari['t'];
+$jumlah = (int) $hari['n'];
+$laba = $penjualan - (int) $hari['h'];
+$rata = $jumlah ? $penjualan / $jumlah : 0;
 
-$st = $db->prepare("SELECT COUNT(*) FROM transaksi WHERE tanggal=?");
+$st = $db->prepare('SELECT COALESCE(SUM(p.nominal),0) FROM pengeluaran p JOIN shift s ON s.id = p.shift_id WHERE s.tanggal = ?');
 $st->execute([$today]);
-$jumlah = (int) $st->fetchColumn();
+$keluar = (int) $st->fetchColumn();
 
-$st = $db->prepare("SELECT COUNT(*) FROM transaksi WHERE tanggal=? AND status='lunas'");
-$st->execute([$today]);
-$jumlahLunas = (int) $st->fetchColumn();
-$rata = $jumlahLunas ? $penjualan / $jumlahLunas : 0;
-
-// Stok kritis.
-$bahan = $db->query("SELECT * FROM bahan ORDER BY id")->fetchAll();
+$menuRendah = $db->query('SELECT nama, stok FROM menu WHERE aktif = 1 AND stok <= ' . STOK_MENU_RENDAH . ' ORDER BY stok, nama')->fetchAll();
 $kritis = 0;
-foreach ($bahan as $b) {
+foreach ($db->query('SELECT qty, minimum FROM bahan')->fetchAll() as $b) {
     if (stok_status((float) $b['qty'], (float) $b['minimum']) === 'kritis') {
         $kritis++;
     }
 }
 
-// Grafik 7 hari + transaksi terbaru.
-$week = $db->query("SELECT * FROM ringkasan_harian ORDER BY tanggal")->fetchAll();
-$weekTotal = array_sum(array_column($week, 'total'));
-$maxWeek = max(1, ...array_column($week, 'total'));
-$recent = $db->query("SELECT * FROM transaksi ORDER BY id DESC LIMIT 8")->fetchAll();
+// Grafik: 6 hari sebelumnya dari ringkasan + hari ini dari transaksi.
+$week = [];
+$st = $db->prepare('SELECT * FROM ringkasan_harian WHERE tanggal < ? ORDER BY tanggal DESC LIMIT 6');
+$st->execute([$today]);
+foreach (array_reverse($st->fetchAll()) as $r) {
+    $week[] = [$r['hari'], (int) $r['total']];
+}
+$week[] = [hari_singkat($today), $penjualan];
+$weekTotal = array_sum(array_column($week, 1));
+$maxWeek = max(1, ...array_column($week, 1));
+
+$recent = $db->query("SELECT * FROM transaksi WHERE status <> 'open' ORDER BY id DESC LIMIT 8")->fetchAll();
+$shift = current_shift();
 
 $page = 'dashboard';
 $title = 'Dashboard';
@@ -39,26 +45,31 @@ require __DIR__ . '/includes/header.php';
 <div class="page-header">
   <div class="page-heading">
     <h1 class="page-title">Dashboard</h1>
-    <span class="meta">Ringkasan hari ini · <?= e(date('d M Y')) ?></span>
+    <span class="meta">Ringkasan hari ini · <?= e(tgl_id()) ?></span>
   </div>
   <span class="meta">Diperbarui <?= e(date('H:i')) ?></span>
 </div>
 
-<div class="stats">
+<div class="stats stats4">
   <div class="stat stat-primary">
     <span class="stat-label">Total penjualan</span>
     <span class="stat-value"><?= e(rp($penjualan)) ?></span>
-    <span class="stat-note">Transaksi lunas hari ini</span>
+    <span class="stat-note"><?= $jumlah ?> transaksi · rata-rata <?= e(rp($rata)) ?></span>
   </div>
   <div class="stat">
-    <span class="stat-label">Jumlah transaksi</span>
-    <span class="stat-value"><?= e((string) $jumlah) ?></span>
-    <span class="stat-note">Rata-rata <?= e(rp($rata)) ?></span>
+    <span class="stat-label">Laba kotor</span>
+    <span class="stat-value"><?= e(rp($laba)) ?></span>
+    <span class="stat-note">Penjualan − HPP · pengeluaran <?= e(rp($keluar)) ?></span>
+  </div>
+  <div class="stat<?= $menuRendah ? ' stat-warn' : '' ?>">
+    <span class="stat-label">Stok menu menipis</span>
+    <span class="stat-value"><?= count($menuRendah) ?> menu</span>
+    <a href="menu.php" style="font-size:12px;font-weight:700">Isi ulang stok →</a>
   </div>
   <div class="stat stat-danger">
-    <span class="stat-label">Stok kritis</span>
-    <span class="stat-value"><?= e((string) $kritis) ?> bahan</span>
-    <a href="stok.php">Lihat stok &rarr;</a>
+    <span class="stat-label">Bahan baku kritis</span>
+    <span class="stat-value"><?= $kritis ?> bahan</span>
+    <a href="stok.php">Lihat stok →</a>
   </div>
 </div>
 
@@ -69,46 +80,32 @@ require __DIR__ . '/includes/header.php';
       <span class="meta">Total <?= e(rp($weekTotal)) ?></span>
     </div>
     <div class="chart">
-      <?php foreach ($week as $i => $w): ?>
-        <div class="chart-col" title="<?= e($w['hari'] . ': ' . rp($w['total'])) ?>">
-          <span class="chart-value"><?= e(number_format($w['total'] / 1e6, 1, ',', '.')) ?>jt</span>
+      <?php foreach ($week as $i => [$hr, $tot]): ?>
+        <div class="chart-col" title="<?= e($hr . ': ' . rp($tot)) ?>">
+          <span class="chart-value"><?= e(number_format($tot / 1e6, 1, ',', '.')) ?>jt</span>
           <div class="chart-bar-area">
-            <div class="chart-bar<?= $i === count($week) - 1 ? ' is-today' : '' ?>"
-                 style="height: <?= (int) round($w['total'] / $maxWeek * 100) ?>%"></div>
+            <div class="chart-bar<?= $i === count($week) - 1 ? ' is-today' : '' ?>" style="height:<?= (int) round($tot / $maxWeek * 100) ?>%"></div>
           </div>
         </div>
       <?php endforeach; ?>
     </div>
-    <div class="chart-days">
-      <?php foreach ($week as $w): ?>
-        <span><?= e($w['hari']) ?></span>
-      <?php endforeach; ?>
-    </div>
+    <div class="chart-days"><?php foreach ($week as [$hr]): ?><span><?= e($hr) ?></span><?php endforeach; ?></div>
   </section>
 
   <section class="panel dash-card">
     <div class="dash-card-head">
       <h2 class="dash-card-title">Transaksi terbaru</h2>
-      <a href="laporan.php" class="strong" style="font-size:12px">Semua &rarr;</a>
+      <a href="riwayat.php" class="strong" style="font-size:12px">Semua →</a>
     </div>
-    <div class="trow thead dash-thead" style="grid-template-columns:0.8fr 1fr 1fr 0.9fr">
-      <span>Waktu</span><span>Kasir</span><span>Total</span><span>Status</span>
-    </div>
+    <div class="trow thead dash-thead" style="grid-template-columns:.8fr 1fr 1fr .9fr"><span>Waktu</span><span>Kasir</span><span>Total</span><span>Status</span></div>
     <div class="dash-rows">
       <?php foreach ($recent as $t): ?>
-        <div class="trow dash-row" style="grid-template-columns:0.8fr 1fr 1fr 0.9fr">
-          <span class="strong"><?= e($t['waktu']) ?></span>
-          <span><?= e($t['kasir']) ?></span>
-          <span class="strong"><?= e(rp($t['total'])) ?></span>
-          <span>
-            <?php if ($t['status'] === 'lunas'): ?>
-              <span class="badge badge-ok badge-xs">Lunas</span>
-            <?php else: ?>
-              <span class="badge badge-bad badge-xs">Batal</span>
-            <?php endif; ?>
-          </span>
+        <div class="trow dash-row" style="grid-template-columns:.8fr 1fr 1fr .9fr">
+          <span class="strong"><?= e($t['waktu']) ?></span><span><?= e($t['kasir']) ?></span><span class="strong"><?= e(rp($t['total'])) ?></span>
+          <span><?= $t['status'] === 'lunas' ? '<span class="badge badge-ok badge-xs">Lunas</span>' : '<span class="badge badge-bad badge-xs">Batal</span>' ?></span>
         </div>
       <?php endforeach; ?>
+      <?php if (!$recent): ?><div class="empty">Belum ada transaksi.</div><?php endif; ?>
     </div>
   </section>
 </div>

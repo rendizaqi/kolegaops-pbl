@@ -9,12 +9,12 @@
  *   KOLEGA_DB_DRIVER=sqlite php setup.php
  */
 require __DIR__ . '/includes/functions.php';
-require __DIR__ . '/includes/schema_seed.php';
+require_once __DIR__ . '/includes/schema_seed.php';
 
 $db     = pdo();
 $driver = $GLOBALS['KOLEGA_CONFIG']['driver'];
 
-foreach (['transaksi', 'ringkasan_harian', 'bahan', 'menu'] as $t) {
+foreach (['transaksi_item', 'transaksi', 'pengeluaran', 'shift', 'ringkasan_harian', 'bahan', 'menu', 'users'] as $t) {
     $db->exec("DROP TABLE IF EXISTS $t");
 }
 kolega_create_tables($db, $driver, false);

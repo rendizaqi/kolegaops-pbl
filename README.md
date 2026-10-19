@@ -8,19 +8,22 @@ melihat laporan transaksi harian.
 
 | Halaman | Fungsi |
 | --- | --- |
-| **Dashboard** | Ringkasan penjualan hari ini, jumlah transaksi, stok kritis, grafik pendapatan 7 hari, dan transaksi terbaru |
-| **Kasir** | Pilih menu, atur jumlah pesanan, hitung total, input nominal bayar, kembalian otomatis, dan simpan transaksi |
-| **Manajemen Menu** | Tambah, ubah, hapus produk (nama, kategori, harga), serta aktif/nonaktifkan menu |
-| **Manajemen Stok** | Daftar bahan baku dengan status Kritis / Menipis / Aman, update stok (tambah, kurangi, set jumlah), dan tambah bahan |
-| **Laporan Transaksi** | Filter per tanggal, shift, dan kasir; ringkasan pendapatan; ekspor CSV |
+| **Login** | Akun sendiri untuk tiap orang: 1 pemilik dan 5 pegawai |
+| **Shift** | Buka/tutup shift (8 jam, satu kasir), modal awal, pengeluaran, selisih uang laci |
+| **Kasir** | Pesanan, bayar tunai atau QRIS, open bill, kembalian otomatis, stok menu berkurang otomatis |
+| **Struk** | Struk 80 mm siap cetak tanpa watermark |
+| **Riwayat Transaksi** | Filter tanggal, shift, metode, status, ekspor CSV |
+| **Manajemen Menu** | Nama, kategori, HPP, harga jual, profit, stok menu, isi ulang stok |
+| **Stok Bahan Baku** | Status Kritis / Menipis / Aman dan update stok |
+| **Laporan** | Per shift dan harian, lengkap dengan HPP dan laba untuk pemilik |
+| **Dashboard & Akun** | Ringkasan pemilik, kelola akun pegawai |
 
-Status stok: **Kritis** bila stok di bawah atau sama dengan batas minimum, **Menipis**
-bila masih dalam 1,5 kali batas minimum, selain itu **Aman**.
+Akun demo: semua memakai kata sandi `kolega123` (lihat `php/README.md`).
 
 ## Teknologi
 
-- **PHP 8** (tanpa framework), **HTML**, **CSS**, tanpa JavaScript
-- **MySQL** untuk produksi, **SQLite** untuk uji coba lokal
+- **PHP 8 native** (tanpa framework), **HTML**, **CSS**
+- **SQLite** bawaan untuk demo, **MySQL** sebagai opsi (belum diuji pada versi ini)
 - **Docker** (`php/Dockerfile` dan `php/docker-compose.yml`)
 
 Folder `src/` berisi prototipe tampilan versi React + TypeScript + Vite. Versi ini
@@ -29,12 +32,12 @@ dipakai sebagai acuan desain, bukan aplikasi utama.
 ## Struktur proyek
 
 ```
-php/        Aplikasi utama (PHP + MySQL)
-  dashboard.php, kasir.php, menu.php, stok.php, laporan.php
+php/        Aplikasi utama (PHP native)
+  login, dashboard, kasir, shift, struk, riwayat, menu, stok, laporan, users
   includes/   koneksi database, fungsi bantu, kerangka halaman
   config.php  pengaturan koneksi database
   schema.sql  skema tabel MySQL
-  setup.php   reset database lokal + data contoh
+  setup.php   reset database + data contoh
   init.php    inisialisasi database yang aman diulang (dipakai Docker)
 src/        Prototipe tampilan React (acuan desain)
 project/    File desain wireframe
@@ -47,8 +50,7 @@ Butuh PHP 8 dengan ekstensi `pdo_sqlite`. Tidak perlu memasang MySQL.
 
 ```sh
 cd php
-KOLEGA_DB_DRIVER=sqlite php setup.php            # buat tabel + data contoh
-KOLEGA_DB_DRIVER=sqlite php -S localhost:8000    # lalu buka http://localhost:8000
+php -S localhost:8000    # lalu buka http://localhost:8000
 ```
 
 Dengan Docker (aplikasi + MySQL):
@@ -63,15 +65,12 @@ variable `KOLEGA_DB_*`), impor `php/schema.sql`, lalu jalankan `php/setup.php` s
 
 ## Status
 
-Ini versi pertama dengan data contoh. Yang sudah jalan: kelima halaman di atas dengan
-data tersimpan di database.
+Versi demo dengan data contoh. Sudah jalan: login per akun, shift, kasir (tunai, QRIS,
+open bill), struk, HPP dan laba, laporan per shift dan harian.
 
 Belum ada, dan masuk rencana pengembangan:
 
-- Login dengan akun per orang (1 pemilik, 5 pegawai)
-- Pencatatan shift (8 jam), tutup shift, dan laporan per shift
-- HPP dan laba per produk, laporan harian lengkap dengan HPP
-- Pembayaran tunai dan QRIS, pencatatan pengeluaran
-- Stok per menu yang berkurang otomatis saat transaksi
-- Cetak struk dan open bill
+- Stok bahan baku yang terhubung ke menu, dan laporan stok bahan baku per shift
+- Rekap QRIS otomatis dari DANA (saat ini dicocokkan manual dengan laporan DANA)
 - Pengiriman laporan ke WhatsApp
+- Pengujian jalur MySQL
