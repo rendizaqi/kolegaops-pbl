@@ -1,120 +1,119 @@
 <?php
-// Laporan harian: gabungan semua shift pada satu tanggal, lengkap dengan HPP dan laba. Khusus pemilik.
-require __DIR__ . '/../includes/owner.php';
-require __DIR__ . '/../includes/koneksi.php';
-require __DIR__ . '/../includes/helpers.php';
-require __DIR__ . '/../includes/shift.php';
-$page_title = "Laporan Harian";
-
-$tanggal = $_GET['tanggal'] ?? date('Y-m-d');
-
-$stmt = $pdo->prepare("SELECT s.*, u.nama AS kasir FROM shift s JOIN users u ON u.id = s.kasir_id WHERE s.tanggal = :tanggal ORDER BY s.id");
-$stmt->execute(['tanggal' => $tanggal]);
-$daftarShift = $stmt->fetchAll();
-
-$jumlah = ['tunai' => 0, 'qris' => 0, 'total' => 0, 'jumlah' => 0, 'hpp' => 0, 'pengeluaran' => 0];
-$selisihTotal = 0;
-$rincian = [];
-foreach ($daftarShift as $s) {
-    $st = statistik_shift($pdo, (int) $s['id']);
-    $selisih = $s['uang_fisik'] !== null ? (int) $s['uang_fisik'] - kas_diharapkan($s, $st) : null;
-    $rincian[] = ['shift' => $s, 'stat' => $st, 'selisih' => $selisih];
-    foreach (array_keys($jumlah) as $kunci) {
-        $jumlah[$kunci] += $st[$kunci];
-    }
-    $selisihTotal += $selisih ?? 0;
-}
-$laba = $jumlah['total'] - $jumlah['hpp'];
-
-// Menu terlaris pada tanggal tersebut (hanya transaksi lunas).
-$stmt = $pdo->prepare(
-    "SELECT i.nama, SUM(i.qty) AS terjual, SUM(i.qty * i.harga) AS omzet, SUM(i.qty * (i.harga - i.hpp)) AS profit
-     FROM transaksi_item i
-     JOIN transaksi t ON t.id = i.transaksi_id
-     JOIN shift s ON s.id = t.shift_id
-     WHERE s.tanggal = :tanggal AND t.status = 'lunas'
-     GROUP BY i.nama ORDER BY terjual DESC, omzet DESC LIMIT 5"
-);
-$stmt->execute(['tanggal' => $tanggal]);
-$terlaris = $stmt->fetchAll();
-
+$page_title = "Laporan Transaksi Harian";
+$menu_aktif = "laporan";
 include __DIR__ . '/../includes/header.php';
+
+$daftarKasir = array_values(array_unique(array_column($transaksi, 'kasir')));
+
+// Hitungan awal (semua shift). JavaScript menghitung ulang saat filter diganti.
+$pendapatan = 0;
+foreach ($transaksi as $t) {
+    if ($t['status'] === 'lunas') {
+        $pendapatan += $t['total'];
+    }
+}
 ?>
         <div class="page-header">
             <div class="page-heading">
-                <h1 class="page-title">Laporan Harian</h1>
-                <span class="meta"><?php echo e(tanggal_id($tanggal)); ?></span>
+                <h1 class="page-title">Laporan Transaksi Harian</h1>
+                <span class="meta"><?php echo e(tanggal_id()); ?> &middot; hanya tampilan contoh, tanggal belum menyaring data</span>
             </div>
+            <button type="button" class="btn btn-outline" id="btn-ekspor" title="Belum aktif di versi tampilan" disabled>Ekspor CSV</button>
         </div>
 
-        <form class="filters" method="get" action="harian.php">
+        <div class="filters" id="filter-laporan">
+            <p class="field">
+                <label class="label" for="tanggal">Tanggal</label>
+                <input class="input" type="date" id="tanggal" value="<?php echo date('Y-m-d'); ?>">
+            </p>
             <div class="field">
-                <span class="label">Jenis laporan</span>
-                <span class="seg">
-                    <a class="seg-opt" href="shift.php?tanggal=<?php echo e($tanggal); ?>">Per shift</a>
-                    <a class="seg-opt is-active" href="harian.php?tanggal=<?php echo e($tanggal); ?>">Harian</a>
+                <span class="label">Shift</span>
+                <span class="seg" id="seg-shift">
+                    <button type="button" class="seg-opt is-active" data-shift="Semua">Semua</button>
+                    <button type="button" class="seg-opt" data-shift="Pagi">Pagi</button>
+                    <button type="button" class="seg-opt" data-shift="Siang">Siang</button>
+                    <button type="button" class="seg-opt" data-shift="Malam">Malam</button>
                 </span>
             </div>
             <p class="field">
-                <label class="label" for="tanggal">Tanggal</label>
-                <input class="input" type="date" id="tanggal" name="tanggal" value="<?php echo e($tanggal); ?>">
+                <label class="label" for="filter-kasir">Kasir</label>
+                <select class="input" id="filter-kasir">
+                    <option value="">Semua kasir</option>
+                    <?php foreach ($daftarKasir as $k): ?><option><?php echo e($k); ?></option><?php endforeach; ?>
+                </select>
             </p>
-            <button class="btn btn-outline btn-md" type="submit">Terapkan</button>
-        </form>
+        </div>
 
         <div class="content">
             <div class="cards4">
-                <div class="stat stat-primary"><span class="stat-label">Total penjualan</span><span class="stat-value"><?php echo e(rp($jumlah['total'])); ?></span><span class="stat-note"><?php echo $jumlah['jumlah']; ?> transaksi lunas</span></div>
-                <div class="stat"><span class="stat-label">Total HPP</span><span class="stat-value"><?php echo e(rp($jumlah['hpp'])); ?></span></div>
-                <div class="stat"><span class="stat-label">Laba kotor</span><span class="stat-value"><?php echo e(rp($laba)); ?></span><span class="stat-note">Penjualan &minus; HPP</span></div>
-                <div class="stat"><span class="stat-label">Laba setelah pengeluaran</span><span class="stat-value"><?php echo e(rp($laba - $jumlah['pengeluaran'])); ?></span><span class="stat-note">Pengeluaran <?php echo e(rp($jumlah['pengeluaran'])); ?></span></div>
+                <div class="stat stat-primary"><span class="stat-label">Total pendapatan</span><span class="stat-value" id="r-pendapatan"><?php echo e(rp($pendapatan)); ?></span><span class="stat-note" id="r-lunas"></span></div>
+                <div class="stat"><span class="stat-label">Total transaksi</span><span class="stat-value" id="r-jumlah"><?php echo count($transaksi); ?></span><span class="stat-note" id="r-batal"></span></div>
+                <div class="stat"><span class="stat-label">Total tunai</span><span class="stat-value" id="r-tunai">Rp 0</span></div>
+                <div class="stat"><span class="stat-label">Total QRIS</span><span class="stat-value" id="r-qris">Rp 0</span><span class="stat-note">Cocokkan dengan laporan DANA</span></div>
             </div>
             <div class="cards4">
-                <div class="stat"><span class="stat-label">Total tunai</span><span class="stat-value"><?php echo e(rp($jumlah['tunai'])); ?></span></div>
-                <div class="stat"><span class="stat-label">Total QRIS</span><span class="stat-value"><?php echo e(rp($jumlah['qris'])); ?></span><span class="stat-note">Cocokkan dengan laporan DANA</span></div>
-                <div class="stat"><span class="stat-label">Selisih uang laci (semua shift)</span><span class="stat-value stat-value-sm"><?php echo label_selisih($selisihTotal); ?></span></div>
-                <div class="stat"><span class="stat-label">Jumlah shift</span><span class="stat-value"><?php echo count($rincian); ?></span></div>
+                <div class="stat"><span class="stat-label">Total HPP</span><span class="stat-value" id="r-hpp">Rp 0</span></div>
+                <div class="stat"><span class="stat-label">Laba kotor</span><span class="stat-value" id="r-laba">Rp 0</span><span class="stat-note">Pendapatan &minus; HPP</span></div>
+                <div class="stat"><span class="stat-label">Rata-rata / transaksi</span><span class="stat-value" id="r-rata">Rp 0</span></div>
+                <div class="stat"><span class="stat-label">Pengeluaran</span><span class="stat-value" id="r-keluar">Rp 0</span></div>
             </div>
 
             <section class="panel">
-                <div class="dash-card-head"><h2 class="dash-card-title">Rincian per shift</h2></div>
+                <div class="dash-card-head"><h2 class="dash-card-title">Hitungan uang laci per shift</h2></div>
                 <div class="table-responsive">
-                <table class="tabel">
-                    <thead><tr><th>Shift</th><th>Kasir</th><th>Tunai</th><th>QRIS</th><th>Total</th><th>HPP</th><th>Pengeluaran</th><th>Selisih</th></tr></thead>
+                <table class="tabel" id="tabel-shift">
+                    <thead><tr><th>Shift</th><th>Kasir</th><th>Modal awal</th><th>Tunai</th><th>Pengeluaran</th><th>Seharusnya</th><th>Uang fisik</th><th>Selisih</th></tr></thead>
                     <tbody>
-                        <?php foreach ($rincian as $r): ?>
-                        <tr>
-                            <td><a class="strong" href="shift.php?id=<?php echo (int) $r['shift']['id']; ?>"><?php echo e($r['shift']['nama']); ?></a></td>
-                            <td><?php echo e($r['shift']['kasir']); ?></td>
-                            <td><?php echo e(rp($r['stat']['tunai'])); ?></td>
-                            <td><?php echo e(rp($r['stat']['qris'])); ?></td>
-                            <td class="strong"><?php echo e(rp($r['stat']['total'])); ?></td>
-                            <td class="muted"><?php echo e(rp($r['stat']['hpp'])); ?></td>
-                            <td><?php echo e(rp($r['stat']['pengeluaran'])); ?></td>
-                            <td><?php echo $r['selisih'] === null ? '&ndash;' : label_selisih($r['selisih']); ?></td>
+                        <?php foreach ($shiftRingkas as $s):
+                            $tunai = 0;
+                            foreach ($transaksi as $t) {
+                                if ($t['shift'] === $s['shift'] && $t['status'] === 'lunas' && $t['metode'] === 'tunai') {
+                                    $tunai += $t['total'];
+                                }
+                            }
+                            $seharusnya = $s['modal'] + $tunai - $s['pengeluaran'];
+                            $selisih = $s['uang_fisik'] - $seharusnya;
+                        ?>
+                        <tr data-shift="<?php echo e($s['shift']); ?>" data-kasir="<?php echo e($s['kasir']); ?>" data-keluar="<?php echo $s['pengeluaran']; ?>">
+                            <td class="strong"><?php echo e($s['shift']); ?></td>
+                            <td><?php echo e($s['kasir']); ?></td>
+                            <td><?php echo e(rp($s['modal'])); ?></td>
+                            <td><?php echo e(rp($tunai)); ?></td>
+                            <td><?php echo e(rp($s['pengeluaran'])); ?><?php echo $s['catatan'] ? ' <span class="meta">(' . e($s['catatan']) . ')</span>' : ''; ?></td>
+                            <td><?php echo e(rp($seharusnya)); ?></td>
+                            <td class="strong"><?php echo e(rp($s['uang_fisik'])); ?></td>
+                            <td>
+                                <?php if ($selisih === 0): ?><span class="selisih selisih-ok">Pas</span>
+                                <?php elseif ($selisih > 0): ?><span class="selisih selisih-lebih">Lebih <?php echo e(rp($selisih)); ?></span>
+                                <?php else: ?><span class="selisih selisih-kurang">Kurang <?php echo e(rp(-$selisih)); ?></span><?php endif; ?>
+                            </td>
                         </tr>
                         <?php endforeach; ?>
-                        <?php if (!$rincian): ?><tr><td colspan="8" class="empty">Tidak ada shift pada tanggal ini.</td></tr><?php endif; ?>
                     </tbody>
                 </table>
                 </div>
             </section>
 
             <section class="panel">
-                <div class="dash-card-head"><h2 class="dash-card-title">Menu terlaris</h2></div>
+                <div class="dash-card-head"><h2 class="dash-card-title">Riwayat transaksi</h2></div>
                 <div class="table-responsive">
-                <table class="tabel">
-                    <thead><tr><th>Menu</th><th>Terjual</th><th>Omzet</th><th>Profit</th></tr></thead>
+                <table class="tabel" id="tabel-transaksi">
+                    <thead><tr><th>Waktu</th><th>No. transaksi</th><th>Kasir</th><th>Shift</th><th>Metode</th><th>Total</th><th>Status</th><th>Struk</th></tr></thead>
                     <tbody>
-                        <?php foreach ($terlaris as $m): ?>
-                        <tr>
-                            <td class="name"><?php echo e($m['nama']); ?></td>
-                            <td><?php echo (int) $m['terjual']; ?></td>
-                            <td><?php echo e(rp($m['omzet'])); ?></td>
-                            <td class="profit"><?php echo e(rp($m['profit'])); ?></td>
+                        <?php foreach ($transaksi as $t): ?>
+                        <tr data-shift="<?php echo e($t['shift']); ?>" data-kasir="<?php echo e($t['kasir']); ?>" data-metode="<?php echo e($t['metode']); ?>"
+                            data-status="<?php echo e($t['status']); ?>" data-total="<?php echo $t['total']; ?>" data-hpp="<?php echo $t['hpp']; ?>">
+                            <td class="strong"><?php echo e($t['waktu']); ?></td>
+                            <td class="mono"><?php echo e($t['kode']); ?></td>
+                            <td><?php echo e($t['kasir']); ?></td>
+                            <td class="muted"><?php echo e($t['shift']); ?></td>
+                            <td><?php echo $t['metode'] === 'qris' ? '<span class="badge badge-qris">QRIS</span>' : 'Tunai'; ?></td>
+                            <td class="strong"><?php echo e(rp($t['total'])); ?></td>
+                            <td><?php echo $t['status'] === 'lunas' ? '<span class="badge badge-ok">Lunas</span>' : '<span class="badge badge-bad">Dibatalkan</span>'; ?></td>
+                            <td><a class="strong" href="../kasir/struk.php?kode=<?php echo urlencode($t['kode']); ?>" target="_blank">Struk</a></td>
                         </tr>
                         <?php endforeach; ?>
-                        <?php if (!$terlaris): ?><tr><td colspan="4" class="empty">Belum ada penjualan.</td></tr><?php endif; ?>
+                        <tr id="transaksi-kosong" class="hidden"><td colspan="8" class="empty">Tidak ada transaksi pada filter ini.</td></tr>
                     </tbody>
                 </table>
                 </div>
